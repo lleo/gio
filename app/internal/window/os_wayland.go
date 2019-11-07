@@ -1018,6 +1018,9 @@ func (w *window) draw(sync bool) {
 	})
 }
 
+func (w *window) eglFrameDone() {
+}
+
 func (w *window) setStage(s system.Stage) {
 	if s == w.stage {
 		return

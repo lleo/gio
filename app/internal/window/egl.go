@@ -28,6 +28,7 @@ type eglDriver interface {
 	eglDisplay() _EGLNativeDisplayType
 	eglWindow(visID int) (_EGLNativeWindowType, int, int, error)
 	eglDestroy()
+	eglFrameDone()
 	needVSync() bool
 }
 
@@ -95,6 +96,7 @@ func (c *context) Present() error {
 	if !eglSwapBuffers(c.eglCtx.disp, c.eglSurf) {
 		return fmt.Errorf("eglSwapBuffers failed (%x)", eglGetError())
 	}
+	c.driver.eglFrameDone()
 	if c.srgbFBO != nil {
 		c.srgbFBO.AfterPresent()
 	}
@@ -120,7 +122,8 @@ func (c *context) Functions() *gl.Functions {
 
 func (c *context) Lock() {}
 
-func (c *context) Unlock() {}
+func (c *context) Unlock() {
+}
 
 func (c *context) destroySurface() {
 	if c.eglSurf == nilEGLSurface {

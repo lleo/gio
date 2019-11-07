@@ -74,8 +74,9 @@ type x11Window struct {
 	}
 	dead bool
 
-	mu        sync.Mutex
-	animating bool
+	mu         sync.Mutex
+	animating  bool
+	frameReady bool
 }
 
 func (w *x11Window) SetAnimating(anim bool) {
@@ -124,6 +125,7 @@ func (w *x11Window) loop() {
 
 loop:
 	for !w.dead {
+		time.Sleep(10*time.Millisecond)
 		var syn, redraw bool
 		// Check for pending draw events before checking animation or blocking.
 		// This fixes an issue on Xephyr where on startup XPending() > 0 but
@@ -131,25 +133,23 @@ loop:
 		if syn = h.handleEvents(); !syn {
 			w.mu.Lock()
 			animating := w.animating
+			redraw = animating && w.frameReady
+			w.frameReady = false
 			w.mu.Unlock()
-			if animating {
-				redraw = true
-			} else {
-				// Clear poll events.
-				*xEvents = 0
-				// Wait for X event or gio notification.
-				if _, err := syscall.Poll(pollfds, -1); err != nil && err != syscall.EINTR {
-					panic(fmt.Errorf("x11 loop: poll failed: %w", err))
-				}
-				switch {
-				case *xEvents&syscall.POLLIN != 0:
-					syn = h.handleEvents()
-					if w.dead {
-						break loop
-					}
-				case *xEvents&(syscall.POLLERR|syscall.POLLHUP) != 0:
+			// Clear poll events.
+			*xEvents = 0
+			// Wait for X event or gio notification.
+			if _, err := syscall.Poll(pollfds, -1); err != nil && err != syscall.EINTR {
+				panic(fmt.Errorf("x11 loop: poll failed: %w", err))
+			}
+			switch {
+			case *xEvents&syscall.POLLIN != 0:
+				syn = h.handleEvents()
+				if w.dead {
 					break loop
 				}
+			case *xEvents&(syscall.POLLERR|syscall.POLLHUP) != 0:
+				break loop
 			}
 		}
 		// Clear notifications.
@@ -179,6 +179,18 @@ loop:
 		}
 	}
 	w.w.Event(system.DestroyEvent{Err: nil})
+}
+
+func (w *x11Window) eglFrameDone() {
+	w.mu.Lock()
+	anim := w.animating
+	if anim {
+		w.frameReady = true
+	}
+	w.mu.Unlock()
+	if anim {
+		w.wakeup()
+	}
 }
 
 func (w *x11Window) destroy() {
