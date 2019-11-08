@@ -344,6 +344,7 @@ func (g *GPU) renderLoop(glctx gl.Context) error {
 				r.pather.stenciler.invalidateFBO()
 				coverTimer.end()
 				err := glctx.Present()
+				ctx.Finish()
 				cleanupTimer.begin()
 				g.cache.frame(ctx)
 				g.pathCache.frame(ctx)
